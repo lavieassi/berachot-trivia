@@ -24,17 +24,28 @@
     <main id="setupView" class="glass-card" style="text-align: center;">
       <h2 style="color: var(--gold-primary); margin-bottom: 12px;">פתיחת חדר משחק חדש</h2>
       <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 20px;">
-        לחץ על הכפתור כדי ליצור קוד חדר ו-QR Code עבור המטיילים באוטובוס.
+        בחר את מספר השאלות למשחק היומי ולחץ ליצירת קוד חדר.
       </p>
+
+      <div class="input-group" style="text-align: right; margin-bottom: 18px;">
+        <label class="input-label" for="questionCountSelect">🎯 מספר שאלות למשחק זה:</label>
+        <select id="questionCountSelect" class="input-field" style="background: #0D1B2A;">
+          <option value="10">10 שאלות (משחק קצר - כ-10 דקות)</option>
+          <option value="15" selected>15 שאלות (משחק מומלץ - כ-15 דקות)</option>
+          <option value="20">20 שאלות (משחק מורחב)</option>
+          <option value="30">30 שאלות</option>
+          <option value="72">כל 72 השאלות</option>
+        </select>
+      </div>
 
       <button id="createRoomBtn" class="btn-primary" style="margin-bottom: 16px;">צור חדר משחק 🎲</button>
 
       <div style="border-top: 1px solid rgba(255,255,255,0.1); padding-top: 16px; margin-top: 12px; text-align: right;">
         <h3 style="color: var(--gold-accent); font-size: 1.05rem; margin-bottom: 8px;">📑 עריכה וייבוא 72 השאלות (אופציונלי):</h3>
         <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 10px;">
-          המערכת מגיעה מובנית עם שאלות מקיצור ילקוט יוסף. תוכל להדביק/לייבא קובץ JSON של 72 הכרטיסיות שלך כאן:
+          המערכת מגיעה מובנית עם 72 שאלות מקיצור ילקוט יוסף.
         </p>
-        <textarea id="questionsJsonArea" class="input-field" rows="4" placeholder="הדבק כאן JSON של שאלות (אופציונלי)..." style="font-family: monospace; font-size: 0.85rem;"></textarea>
+        <textarea id="questionsJsonArea" class="input-field" rows="3" placeholder="הדבק כאן JSON של שאלות (אופציונלי)..." style="font-family: monospace; font-size: 0.85rem;"></textarea>
       </div>
     </main>
 
@@ -69,6 +80,7 @@
       <div style="display: flex; gap: 12px; flex-direction: column;">
         <button id="startGameBtn" class="btn-primary">🚀 התחל משחק כעת (בסדר שאלות אקראי)</button>
         <button id="nextQuestionBtn" class="btn-secondary" style="display: none;">העבר לשאלה הבאה ➔</button>
+        <button id="endGameEarlyBtn" class="btn-secondary" style="display: none; background: rgba(231,76,60,0.3); border-color: #E74C3C; color: #FFFFFF;">🏆 סיים משחק והכרז מנצחים כעת</button>
       </div>
 
       <!-- Live Game Progress -->
@@ -85,6 +97,24 @@
         </div>
       </div>
 
+    </main>
+
+    <!-- Finished View for Host -->
+    <main id="hostFinishedView" class="glass-card" style="display: none; text-align: center;">
+      <div style="font-size: 3.5rem; margin-bottom: 10px;">👑🏆</div>
+      <h2 style="color: var(--gold-accent); margin-bottom: 16px; font-size: 1.8rem;">טבלת פודיום וסטטיסטיקות המשחק</h2>
+
+      <!-- Podium Cards -->
+      <div id="podiumContainer" style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px;">
+        <!-- Filled dynamically -->
+      </div>
+
+      <!-- Stats Cards -->
+      <div id="statsContainer" style="background: rgba(255,255,255,0.05); padding: 16px; border-radius: 14px; text-align: right; margin-bottom: 20px;">
+        <!-- Filled dynamically -->
+      </div>
+
+      <button onclick="window.location.reload()" class="btn-primary">פתח משחק חדש 🎲</button>
     </main>
   </div>
 
@@ -103,7 +133,8 @@
           alert('קובץ ה-JSON שהכנסת אינו תקין. נעשה שימוש בשאלות ברירת המחדל.');
         }
       }
-      socket.emit('create_room', customQuestions);
+      const count = document.getElementById('questionCountSelect').value;
+      socket.emit('create_room', { customQuestions, questionCount: count });
     });
 
     socket.on('room_created', (data) => {
@@ -151,6 +182,7 @@
         socket.emit('start_game', { roomCode: currentRoomCode });
         document.getElementById('startGameBtn').style.display = 'none';
         document.getElementById('nextQuestionBtn').style.display = 'block';
+        document.getElementById('endGameEarlyBtn').style.display = 'block';
         document.getElementById('hostLiveMonitor').style.display = 'block';
       }
     });
@@ -158,6 +190,12 @@
     document.getElementById('nextQuestionBtn').addEventListener('click', () => {
       if (currentRoomCode) {
         socket.emit('next_question', { roomCode: currentRoomCode });
+      }
+    });
+
+    document.getElementById('endGameEarlyBtn').addEventListener('click', () => {
+      if (confirm('האם אתה בטוח שברצונך לסיים את המשחק כעת ולהכריז על המנצחים?')) {
+        socket.emit('end_game_early', { roomCode: currentRoomCode });
       }
     });
 
@@ -178,6 +216,35 @@
 
     socket.on('question_ended', (data) => {
       document.getElementById('answerProgressText').innerText = `תום 60 השניות! התשובה הנכונה: אופציה ${data.correctIndex + 1}`;
+    });
+
+    socket.on('game_finished', (data) => {
+      document.getElementById('dashboardView').style.display = 'none';
+      document.getElementById('hostFinishedView').style.display = 'block';
+
+      // Render Podium
+      const podium = document.getElementById('podiumContainer');
+      podium.innerHTML = '';
+
+      if (data.winner) {
+        podium.innerHTML += `<div class="leaderboard-item" style="border: 2px solid #FFD700; background: rgba(255,215,0,0.15);"><span style="font-size: 1.5rem;">🥇 מקום 1</span><span class="leaderboard-name" style="font-size: 1.2rem; font-weight: 800;">${data.winner.name}</span><span class="leaderboard-score">${data.winner.score} נק'</span></div>`;
+      }
+      if (data.secondPlace) {
+        podium.innerHTML += `<div class="leaderboard-item" style="border: 1.5px solid #C0C0C0; background: rgba(192,192,192,0.15);"><span style="font-size: 1.3rem;">🥈 מקום 2</span><span class="leaderboard-name" style="font-weight: 700;">${data.secondPlace.name}</span><span class="leaderboard-score">${data.secondPlace.score} נק'</span></div>`;
+      }
+      if (data.thirdPlace) {
+        podium.innerHTML += `<div class="leaderboard-item" style="border: 1.5px solid #CD7F32; background: rgba(205,127,50,0.15);"><span style="font-size: 1.2rem;">🥉 מקום 3</span><span class="leaderboard-name">${data.thirdPlace.name}</span><span class="leaderboard-score">${data.thirdPlace.score} נק'</span></div>`;
+      }
+
+      // Render Stats
+      const statsBox = document.getElementById('statsContainer');
+      statsBox.innerHTML = `
+        <h3 style="color: var(--gold-primary); margin-bottom: 10px;">📊 סטטיסטיקות המשחק:</h3>
+        <p style="margin-bottom: 6px;">🎯 <strong>שאלות שחוקקו:</strong> ${data.stats.totalQuestionsPlayed}</p>
+        <p style="margin-bottom: 6px;">👥 <strong>סה"כ משתתפים:</strong> ${data.stats.totalPlayers}</p>
+        <p style="margin-bottom: 6px;">⚡ <strong>המהיר ביותר בתשובות נכונות:</strong> ${data.stats.fastestPlayerName}</p>
+        <p>🥇 <strong>אלוף הדיוק:</strong> ${data.stats.mostAccuratePlayerName}</p>
+      `;
     });
   </script>
 </body>

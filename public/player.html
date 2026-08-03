@@ -21,7 +21,7 @@
       </div>
     </header>
 
-    <!-- Name & Dedication Entry Modal (If scanned QR directly) -->
+    <!-- Name & Dedication Entry Modal -->
     <main id="nameEntryView" class="glass-card" style="display: none; text-align: center;">
       <h2 style="color: var(--gold-primary); margin-bottom: 12px;">ברוך הבא למשחק! 🎉</h2>
       <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 18px;">אנא הכנס את שמך כדי להצטרף לחדר המשחק באוטובוס:</p>
@@ -96,12 +96,21 @@
       </div>
     </main>
 
-    <!-- Finished View -->
+    <!-- Finished View for Player -->
     <main id="finishedView" class="glass-card" style="display: none; text-align: center;">
-      <div style="font-size: 3rem; margin-bottom: 10px;">👑</div>
-      <h2 style="color: var(--gold-accent); margin-bottom: 8px;">המשחק הסתיים!</h2>
-      <p id="winnerText" style="color: var(--text-main); font-size: 1.2rem; font-weight: 800; margin-bottom: 16px;"></p>
+      <div style="font-size: 3rem; margin-bottom: 10px;">👑🏆</div>
+      <h2 style="color: var(--gold-accent); margin-bottom: 12px; font-size: 1.6rem;">סיום המשחק - פודיום המנצחים!</h2>
       
+      <!-- Podium -->
+      <div id="playerPodiumContainer" style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px;">
+        <!-- Dynamic -->
+      </div>
+
+      <!-- Stats -->
+      <div id="playerStatsContainer" style="background: rgba(255,255,255,0.05); padding: 14px; border-radius: 12px; text-align: right; margin-bottom: 20px; font-size: 0.95rem;">
+        <!-- Dynamic -->
+      </div>
+
       <div id="finalLeaderboardList" class="leaderboard-list">
         <!-- Final rankings -->
       </div>
@@ -200,7 +209,6 @@
 
       updateTimerUI(data.timer);
 
-      // Render Options
       const grid = document.getElementById('optionsGrid');
       grid.innerHTML = '';
       data.options.forEach((opt, idx) => {
@@ -302,9 +310,27 @@
       const finishedView = document.getElementById('finishedView');
       finishedView.style.display = 'block';
 
+      // Render Podium
+      const podium = document.getElementById('playerPodiumContainer');
+      podium.innerHTML = '';
+
       if (data.winner) {
-        document.getElementById('winnerText').innerText = `🏆 המנצח הגדול: ${data.winner.name} עם ${data.winner.score} נקודות!`;
+        podium.innerHTML += `<div class="leaderboard-item" style="border: 2px solid #FFD700; background: rgba(255,215,0,0.15);"><span style="font-size: 1.4rem;">🥇 מקום 1</span><span class="leaderboard-name" style="font-weight: 800;">${data.winner.name}</span><span class="leaderboard-score">${data.winner.score} נק'</span></div>`;
       }
+      if (data.secondPlace) {
+        podium.innerHTML += `<div class="leaderboard-item" style="border: 1.5px solid #C0C0C0; background: rgba(192,192,192,0.15);"><span style="font-size: 1.2rem;">🥈 מקום 2</span><span class="leaderboard-name">${data.secondPlace.name}</span><span class="leaderboard-score">${data.secondPlace.score} ${data.secondPlace.score} נק'</span></div>`;
+      }
+      if (data.thirdPlace) {
+        podium.innerHTML += `<div class="leaderboard-item" style="border: 1.5px solid #CD7F32; background: rgba(205,127,50,0.15);"><span style="font-size: 1.1rem;">🥉 מקום 3</span><span class="leaderboard-name">${data.thirdPlace.name}</span><span class="leaderboard-score">${data.thirdPlace.score} נק'</span></div>`;
+      }
+
+      // Render Stats
+      const statsBox = document.getElementById('playerStatsContainer');
+      statsBox.innerHTML = `
+        <h3 style="color: var(--gold-primary); margin-bottom: 8px; font-size: 1.05rem;">📊 סיכום וסטטיסטיקות:</h3>
+        <p style="margin-bottom: 4px;">⚡ <strong>הכי מהיר בתשובות נכונות:</strong> ${data.stats.fastestPlayerName}</p>
+        <p>🎯 <strong>אלוף הדיוק:</strong> ${data.stats.mostAccuratePlayerName}</p>
+      `;
 
       const listContainer = document.getElementById('finalLeaderboardList');
       listContainer.innerHTML = '';

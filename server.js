@@ -21,7 +21,6 @@ try {
   console.error('Error loading default questions:', err);
 }
 
-// Fisher-Yates Shuffle Helper
 function shuffleArray(array) {
   const arr = [...array];
   for (let i = arr.length - 1; i > 0; i--) {
@@ -31,10 +30,8 @@ function shuffleArray(array) {
   return arr;
 }
 
-// In-memory Room State
 const rooms = {};
 
-// Helper: generate 4-digit code
 function generateRoomCode() {
   let code = Math.floor(1000 + Math.random() * 9000).toString();
   while (rooms[code]) {
@@ -43,7 +40,6 @@ function generateRoomCode() {
   return code;
 }
 
-// QR Code endpoint
 app.get('/api/qr', async (req, res) => {
   const url = req.query.url;
   if (!url) return res.status(400).json({ error: 'Missing url' });
@@ -58,21 +54,25 @@ app.get('/api/qr', async (req, res) => {
 io.on('connection', (socket) => {
   console.log('Client connected:', socket.id);
 
-  // Host creates room
-  socket.on('create_room', (customQuestions) => {
+  // Host creates room with optional question count & custom questions
+  socket.on('create_room', ({ customQuestions, questionCount } = {}) => {
     const roomCode = generateRoomCode();
     const rawQuestions = (Array.isArray(customQuestions) && customQuestions.length > 0)
       ? customQuestions
       : defaultQuestions;
 
-    // Shuffle questions so each game session has a fresh random order for everyone
-    const shuffledQuestions = shuffleArray(rawQuestions);
+    let shuffledQuestions = shuffleArray(rawQuestions);
+
+    const limit = parseInt(questionCount, 10);
+    if (limit > 0 && limit < shuffledQuestions.length) {
+      shuffledQuestions = shuffledQuestions.slice(0, limit);
+    }
 
     rooms[roomCode] = {
       code: roomCode,
       hostSocketId: socket.id,
       players: {},
-      dedications: [], // Refuah dedications list
+      dedications: [],
       questions: shuffledQuestions,
       currentQuestionIndex: -1,
       status: 'lobby',
@@ -87,7 +87,6 @@ io.on('connection', (socket) => {
     });
   });
 
-  // Player joins room
   socket.on('join_room', ({ roomCode, playerName, dedication }) => {
     const room = rooms[roomCode];
     if (!room) {
@@ -99,6 +98,9 @@ io.on('connection', (socket) => {
       id: socket.id,
       name: cleanName,
       score: 0,
+      correctCount: 0,
+      totalAnswered: 0,
+      totalSpeedSeconds: 0,
       hasAnswered: false,
       lastAnswerIndex: null,
       lastAnswerTime: 0
@@ -113,7 +115,6 @@ io.on('connection', (socket) => {
 
     socket.join(roomCode);
 
-    // Notify player
     socket.emit('joined_successfully', {
       roomCode,
       playerName: cleanName,
@@ -123,12 +124,10 @@ io.on('connection', (socket) => {
       dedications: room.dedications
     });
 
-    // Broadcast updated player list & dedications
     io.to(roomCode).emit('player_list_updated', Object.values(room.players));
     io.to(roomCode).emit('dedications_updated', room.dedications);
   });
 
-  // Host starts game
   socket.on('start_game', ({ roomCode }) => {
     const room = rooms[roomCode];
     if (!room || room.hostSocketId !== socket.id) return;
@@ -138,7 +137,6 @@ io.on('connection', (socket) => {
     startQuestionRound(roomCode);
   });
 
-  // Player submits answer
   socket.on('submit_answer', ({ roomCode, answerIndex }) => {
     const room = rooms[roomCode];
     if (!room || room.status !== 'playing') return;
@@ -149,11 +147,14 @@ io.on('connection', (socket) => {
     player.hasAnswered = true;
     player.lastAnswerIndex = answerIndex;
     player.lastAnswerTime = room.timer;
+    player.totalAnswered++;
 
     const currentQ = room.questions[room.currentQuestionIndex];
     if (currentQ && answerIndex === currentQ.correctIndex) {
+      player.correctCount++;
       const speedBonus = Math.floor((room.timer / 60) * 500);
       player.score += (1000 + speedBonus);
+      player.totalSpeedSeconds += room.timer;
     }
 
     socket.emit('answer_received', {
@@ -174,7 +175,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Host advances round
   socket.on('next_question', ({ roomCode }) => {
     const room = rooms[roomCode];
     if (!room || room.hostSocketId !== socket.id) return;
@@ -190,6 +190,13 @@ io.on('connection', (socket) => {
         finishGame(roomCode);
       }
     }
+  });
+
+  // Host manually ends game early and triggers podium/stats
+  socket.on('end_game_early', ({ roomCode }) => {
+    const room = rooms[roomCode];
+    if (!room || room.hostSocketId !== socket.id) return;
+    finishGame(roomCode);
   });
 
   socket.on('disconnect', () => {
@@ -281,12 +288,41 @@ function finishGame(roomCode) {
   if (room.timerInterval) clearInterval(room.timerInterval);
   room.status = 'finished';
 
-  const finalLeaderboard = Object.values(room.players)
-    .sort((a, b) => b.score - a.score);
+  const playersList = Object.values(room.players).sort((a, b) => b.score - a.score);
+
+  // Top 3 Podium
+  const winner = playersList[0] || null;
+  const secondPlace = playersList[1] || null;
+  const thirdPlace = playersList[2] || null;
+
+  // Fun Stats
+  // Fastest responder (highest average remaining seconds on correct answers)
+  const fastestPlayer = [...playersList].sort((a, b) => {
+    const avgA = a.correctCount > 0 ? (a.totalSpeedSeconds / a.correctCount) : 0;
+    const avgB = b.correctCount > 0 ? (b.totalSpeedSeconds / b.correctCount) : 0;
+    return avgB - avgA;
+  })[0] || null;
+
+  // Most accurate player (highest correct percentage)
+  const mostAccuratePlayer = [...playersList].sort((a, b) => {
+    const pctA = a.totalAnswered > 0 ? (a.correctCount / a.totalAnswered) : 0;
+    const pctB = b.totalAnswered > 0 ? (b.correctCount / b.totalAnswered) : 0;
+    return pctB - pctA;
+  })[0] || null;
+
+  const stats = {
+    totalQuestionsPlayed: room.currentQuestionIndex + 1,
+    totalPlayers: playersList.length,
+    fastestPlayerName: fastestPlayer ? fastestPlayer.name : '-',
+    mostAccuratePlayerName: mostAccuratePlayer ? `${mostAccuratePlayer.name} (${mostAccuratePlayer.correctCount}/${mostAccuratePlayer.totalAnswered})` : '-'
+  };
 
   io.to(roomCode).emit('game_finished', {
-    winner: finalLeaderboard[0] || null,
-    leaderboard: finalLeaderboard,
+    winner,
+    secondPlace,
+    thirdPlace,
+    stats,
+    leaderboard: playersList,
     dedications: room.dedications
   });
 }
