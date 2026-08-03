@@ -21,10 +21,10 @@
       </div>
     </header>
 
-    <!-- Name & Dedication Entry Modal -->
+    <!-- Name & Dedication Entry Modal (Shown whenever joining a new room) -->
     <main id="nameEntryView" class="glass-card" style="display: none; text-align: center;">
       <h2 style="color: var(--gold-primary); margin-bottom: 12px;">ברוך הבא למשחק! 🎉</h2>
-      <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 18px;">אנא הכנס את שמך כדי להצטרף לחדר המשחק באוטובוס:</p>
+      <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 18px;">אנא אשר/הכנס את שמך ואת ההקדשה למשחק זה:</p>
       <form id="nameForm">
         <div class="input-group">
           <label class="input-label" for="nameInput">השם שלך:</label>
@@ -124,16 +124,6 @@
   <script>
     const urlParams = new URLSearchParams(window.location.search);
     const roomCode = urlParams.get('room') || sessionStorage.getItem('roomCode');
-    let playerName = sessionStorage.getItem('playerName');
-
-    // Reset dedications if joining a new room code!
-    const lastRoom = sessionStorage.getItem('lastRoomCode');
-    if (lastRoom !== roomCode) {
-      sessionStorage.removeItem('dedication');
-      sessionStorage.setItem('lastRoomCode', roomCode);
-    }
-
-    let userDedication = sessionStorage.getItem('dedication') || '';
 
     if (!roomCode) {
       window.location.href = 'index.html';
@@ -144,15 +134,26 @@
     let selectedAnswerIndex = null;
     let currentQuestionData = null;
 
-    if (!playerName) {
+    let savedName = sessionStorage.getItem('playerName') || '';
+    let lastRoomJoined = sessionStorage.getItem('lastRoomJoined');
+
+    // Always show name & dedication entry form if joining a NEW room
+    if (!savedName || lastRoomJoined !== roomCode) {
       document.getElementById('nameEntryView').style.display = 'block';
+      if (savedName) {
+        document.getElementById('nameInput').value = savedName;
+      }
+
       document.getElementById('nameForm').addEventListener('submit', (e) => {
         e.preventDefault();
         const inputVal = document.getElementById('nameInput').value.trim();
         const modalDed = document.getElementById('dedicationInputModal').value.trim();
+
         if (inputVal) {
           playerName = inputVal;
           sessionStorage.setItem('playerName', playerName);
+          sessionStorage.setItem('lastRoomJoined', roomCode);
+
           if (modalDed) {
             userDedication = modalDed;
             sessionStorage.setItem('dedication', userDedication);
@@ -160,11 +161,14 @@
             sessionStorage.removeItem('dedication');
             userDedication = '';
           }
+
           document.getElementById('nameEntryView').style.display = 'none';
           initPlayerSession();
         }
       });
     } else {
+      playerName = savedName;
+      userDedication = sessionStorage.getItem('dedication') || '';
       initPlayerSession();
     }
 
