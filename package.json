@@ -1,0 +1,15 @@
+{
+  "name": "berachot-trivia",
+  "version": "1.0.0",
+  "description": "Multiplayer synchronized Trivia App for Hilchot Berachot from Kitzur Yalkut Yosef",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "qrcode": "^1.5.3",
+    "socket.io": "^4.7.5"
+  }
+}

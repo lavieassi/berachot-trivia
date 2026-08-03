@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>טריוויה הלכות ברכות - קיצור ילקוט יוסף</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <div class="container">
+    <header>
+      <div class="badge">🍷 טיול מאורגן • טריוויה באוטובוס</div>
+      <h1>טריוויה הלכות ברכות</h1>
+      <p class="subtitle">72 כרטיסיות הלכה עפ"י ספר קיצור ילקוט יוסף כרך א'</p>
+    </header>
+
+    <main class="glass-card">
+      <h2 style="color: var(--gold-primary); margin-bottom: 16px; font-size: 1.3rem; text-align: center;">הצטרפות למשחק</h2>
+      
+      <form id="joinForm">
+        <div class="input-group">
+          <label class="input-label" for="playerName">השם שלך:</label>
+          <input type="text" id="playerName" class="input-field" placeholder="הכנס את שמך" required autocomplete="off">
+        </div>
+
+        <div class="input-group">
+          <label class="input-label" for="roomCode">קוד חדר (4 ספרות):</label>
+          <input type="number" id="roomCode" class="input-field" placeholder="לדוגמה: 1234" required autocomplete="off">
+        </div>
+
+        <div class="input-group">
+          <label class="input-label" for="dedicationInput">🕯️ הקדשת הלימוד לרפואה / לעילוי נשמת (אופציונלי):</label>
+          <input type="text" id="dedicationInput" class="input-field" placeholder="לדוגמה: לרפואת משה בן שרה / לעילוי נשמת..." autocomplete="off">
+        </div>
+
+        <button type="submit" class="btn-primary" style="margin-top: 10px;">כניסה למשחק 🚀</button>
+      </form>
+
+      <div style="margin-top: 24px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 20px; text-align: center;">
+        <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 12px;">מארגן המשחק באוטובוס?</p>
+        <a href="host.html" class="btn-secondary" style="text-decoration: none; display: block;">פתח חדר כמנחה (Host) 👑</a>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    const urlParams = new URLSearchParams(window.location.search);
+    const roomParam = urlParams.get('room');
+    if (roomParam) {
+      document.getElementById('roomCode').value = roomParam;
+    }
+
+    document.getElementById('joinForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const playerName = document.getElementById('playerName').value.trim();
+      const roomCode = document.getElementById('roomCode').value.trim();
+      const dedication = document.getElementById('dedicationInput').value.trim();
+
+      if (playerName && roomCode) {
+        sessionStorage.setItem('playerName', playerName);
+        sessionStorage.setItem('roomCode', roomCode);
+        if (dedication) {
+          sessionStorage.setItem('dedication', dedication);
+        }
+        window.location.href = `player.html?room=${roomCode}`;
+      }
+    });
+  </script>
+</body>
+</html>

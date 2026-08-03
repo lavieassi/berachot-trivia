@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>מנחה - טריוויה הלכות ברכות</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <div class="container" style="max-width: 680px;">
+    <!-- Moving Dedications Ticker -->
+    <div id="hostTickerBanner" class="ticker-banner" style="display: none;">
+      <div id="hostTickerText" class="ticker-text">📜 הלימוד מוקדש לרפואה...</div>
+    </div>
+
+    <header>
+      <div class="badge">👑 לוח בקרה למנחה המשחק</div>
+      <h1>טריוויה הלכות ברכות באוטובוס</h1>
+      <p class="subtitle">ניהול סנכרון 72 כרטיסיות מתוך קיצור ילקוט יוסף</p>
+    </header>
+
+    <!-- Room Setup View -->
+    <main id="setupView" class="glass-card" style="text-align: center;">
+      <h2 style="color: var(--gold-primary); margin-bottom: 12px;">פתיחת חדר משחק חדש</h2>
+      <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 20px;">
+        לחץ על הכפתור כדי ליצור קוד חדר ו-QR Code עבור המטיילים באוטובוס.
+      </p>
+
+      <button id="createRoomBtn" class="btn-primary" style="margin-bottom: 16px;">צור חדר משחק 🎲</button>
+
+      <div style="border-top: 1px solid rgba(255,255,255,0.1); padding-top: 16px; margin-top: 12px; text-align: right;">
+        <h3 style="color: var(--gold-accent); font-size: 1.05rem; margin-bottom: 8px;">📑 עריכה וייבוא 72 השאלות (אופציונלי):</h3>
+        <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 10px;">
+          המערכת מגיעה מובנית עם שאלות מקיצור ילקוט יוסף. תוכל להדביק/לייבא קובץ JSON של 72 הכרטיסיות שלך כאן:
+        </p>
+        <textarea id="questionsJsonArea" class="input-field" rows="4" placeholder="הדבק כאן JSON של שאלות (אופציונלי)..." style="font-family: monospace; font-size: 0.85rem;"></textarea>
+      </div>
+    </main>
+
+    <!-- Active Room Dashboard -->
+    <main id="dashboardView" class="glass-card" style="display: none;">
+      <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 12px; margin-bottom: 16px;">
+        <div>
+          <span style="color: var(--text-muted); font-size: 0.9rem;">קוד חדר:</span>
+          <h2 id="displayRoomCode" style="color: var(--gold-accent); font-size: 2.2rem; font-weight: 900; letter-spacing: 2px;">----</h2>
+        </div>
+        <div style="text-align: left;">
+          <span class="badge" id="playerCountBadge">0 שחקנים מחוברים</span>
+        </div>
+      </div>
+
+      <!-- QR Code Section -->
+      <div class="qr-box">
+        <div class="qr-label">📱 סרוק בטלפון כדי להצטרף למשחק:</div>
+        <img id="qrImage" src="" alt="קוד QR להצטרפות">
+        <div id="joinUrlText" style="color: #0D1B2A; font-weight: 700; font-size: 0.85rem; word-break: break-all;"></div>
+      </div>
+
+      <!-- Player List -->
+      <div style="margin-bottom: 20px;">
+        <h3 style="color: var(--gold-primary); font-size: 1.05rem; margin-bottom: 8px;">שחקנים בחדר ההמתנה:</h3>
+        <div id="connectedPlayersList" style="display: flex; flex-wrap: wrap; gap: 8px; max-height: 120px; overflow-y: auto; padding: 8px; background: rgba(0,0,0,0.2); border-radius: 8px;">
+          <!-- Names appended here -->
+        </div>
+      </div>
+
+      <!-- Controls -->
+      <div style="display: flex; gap: 12px; flex-direction: column;">
+        <button id="startGameBtn" class="btn-primary">🚀 התחל משחק כעת (בסדר שאלות אקראי)</button>
+        <button id="nextQuestionBtn" class="btn-secondary" style="display: none;">העבר לשאלה הבאה ➔</button>
+      </div>
+
+      <!-- Live Game Progress -->
+      <div id="hostLiveMonitor" style="margin-top: 24px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1); display: none;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+          <span id="hostQuestionTitle" style="font-weight: 800; color: var(--gold-accent);">שאלה 1 מתוך 72</span>
+          <span id="hostTimerText" style="font-weight: 800; font-size: 1.2rem; color: #FFFFFF;">60 שניות</span>
+        </div>
+
+        <div id="hostQuestionContent" style="font-size: 1.1rem; color: #FFFFFF; margin-bottom: 12px; line-height: 1.4;"></div>
+
+        <div style="background: rgba(255,255,255,0.05); padding: 12px; border-radius: 10px; text-align: center;">
+          <span id="answerProgressText" style="font-weight: 700; color: var(--gold-primary);">ענו 0 מתוך 0 שחקנים</span>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+    let currentRoomCode = null;
+
+    document.getElementById('createRoomBtn').addEventListener('click', () => {
+      let customQuestions = null;
+      const jsonAreaText = document.getElementById('questionsJsonArea').value.trim();
+      if (jsonAreaText) {
+        try {
+          customQuestions = JSON.parse(jsonAreaText);
+        } catch (err) {
+          alert('קובץ ה-JSON שהכנסת אינו תקין. נעשה שימוש בשאלות ברירת המחדל.');
+        }
+      }
+      socket.emit('create_room', customQuestions);
+    });
+
+    socket.on('room_created', (data) => {
+      currentRoomCode = data.roomCode;
+      document.getElementById('setupView').style.display = 'none';
+      document.getElementById('dashboardView').style.display = 'block';
+      document.getElementById('displayRoomCode').innerText = data.roomCode;
+
+      const joinUrl = `${window.location.protocol}//${window.location.host}/player.html?room=${data.roomCode}`;
+      document.getElementById('joinUrlText').innerText = joinUrl;
+
+      fetch(`/api/qr?url=${encodeURIComponent(joinUrl)}`)
+        .then(res => res.json())
+        .then(qrData => {
+          if (qrData.qr) {
+            document.getElementById('qrImage').src = qrData.qr;
+          }
+        });
+    });
+
+    socket.on('player_list_updated', (players) => {
+      document.getElementById('playerCountBadge').innerText = `${players.length} שחקנים מחוברים`;
+      const list = document.getElementById('connectedPlayersList');
+      list.innerHTML = '';
+      players.forEach(p => {
+        const chip = document.createElement('span');
+        chip.className = 'badge';
+        chip.style.background = 'rgba(255,255,255,0.1)';
+        chip.innerText = p.name;
+        list.appendChild(chip);
+      });
+    });
+
+    socket.on('dedications_updated', (dedications) => {
+      if (dedications && dedications.length > 0) {
+        const banner = document.getElementById('hostTickerBanner');
+        const text = document.getElementById('hostTickerText');
+        text.innerText = `📜 הלימוד מוקדש לרפואה ולזכות: ${dedications.join('  •  ')}`;
+        banner.style.display = 'block';
+      }
+    });
+
+    document.getElementById('startGameBtn').addEventListener('click', () => {
+      if (currentRoomCode) {
+        socket.emit('start_game', { roomCode: currentRoomCode });
+        document.getElementById('startGameBtn').style.display = 'none';
+        document.getElementById('nextQuestionBtn').style.display = 'block';
+        document.getElementById('hostLiveMonitor').style.display = 'block';
+      }
+    });
+
+    document.getElementById('nextQuestionBtn').addEventListener('click', () => {
+      if (currentRoomCode) {
+        socket.emit('next_question', { roomCode: currentRoomCode });
+      }
+    });
+
+    socket.on('new_question', (data) => {
+      document.getElementById('hostQuestionTitle').innerText = `שאלה ${data.questionIndex + 1} מתוך ${data.totalQuestions} (כרטיסיה ${data.id})`;
+      document.getElementById('hostQuestionContent').innerText = data.question;
+      document.getElementById('hostTimerText').innerText = `${data.timer} שניות`;
+      document.getElementById('answerProgressText').innerText = `ענו 0 שחקנים`;
+    });
+
+    socket.on('timer_tick', (data) => {
+      document.getElementById('hostTimerText').innerText = `${data.timer} שניות`;
+    });
+
+    socket.on('answer_progress', (data) => {
+      document.getElementById('answerProgressText').innerText = `ענו ${data.answeredCount} מתוך ${data.totalPlayers} שחקנים`;
+    });
+
+    socket.on('question_ended', (data) => {
+      document.getElementById('answerProgressText').innerText = `תום 60 השניות! התשובה הנכונה: אופציה ${data.correctIndex + 1}`;
+    });
+  </script>
+</body>
+</html>

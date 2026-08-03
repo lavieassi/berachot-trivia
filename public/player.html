@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>שחקן - טריוויה הלכות ברכות</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <div class="container">
+    <!-- Moving Dedications Ticker -->
+    <div id="tickerBanner" class="ticker-banner" style="display: none;">
+      <div id="tickerText" class="ticker-text">📜 הלימוד מוקדש לרפואה...</div>
+    </div>
+
+    <header>
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <span id="playerBadge" class="badge">שחקן: ...</span>
+        <span id="scoreBadge" class="badge" style="background: rgba(255,215,0,0.2); border-color: var(--gold-accent);">ניקוד: 0</span>
+      </div>
+    </header>
+
+    <!-- Name & Dedication Entry Modal (If scanned QR directly) -->
+    <main id="nameEntryView" class="glass-card" style="display: none; text-align: center;">
+      <h2 style="color: var(--gold-primary); margin-bottom: 12px;">ברוך הבא למשחק! 🎉</h2>
+      <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 18px;">אנא הכנס את שמך כדי להצטרף לחדר המשחק באוטובוס:</p>
+      <form id="nameForm">
+        <div class="input-group">
+          <label class="input-label" for="nameInput">השם שלך:</label>
+          <input type="text" id="nameInput" class="input-field" placeholder="הכנס את שמך (למשל: דני)" required autocomplete="off">
+        </div>
+
+        <div class="input-group">
+          <label class="input-label" for="dedicationInputModal">🕯️ הקדשת הלימוד לרפואה / לעילוי נשמת (אופציונלי):</label>
+          <input type="text" id="dedicationInputModal" class="input-field" placeholder="לדוגמה: לרפואת משה בן שרה..." autocomplete="off">
+        </div>
+
+        <button type="submit" class="btn-primary" style="margin-top: 10px;">כניסה למשחק 🚀</button>
+      </form>
+    </main>
+
+    <!-- Lobby View -->
+    <main id="lobbyView" class="glass-card" style="display: none; text-align: center;">
+      <h2 style="color: var(--gold-primary); margin-bottom: 12px;">ממתינים לתחילת המשחק...</h2>
+      <p style="color: var(--text-muted); font-size: 1rem; line-height: 1.5;">
+        המנחה יתחיל את המשחק מיד באוטובוס.<br>
+        הכן את עצמך ל-72 שאלות מרתקות בהלכות ברכות!
+      </p>
+      <div style="margin-top: 24px;">
+        <div class="timer-circle" style="margin: 0 auto; animation: pulse 1.5s infinite;">⏳</div>
+      </div>
+    </main>
+
+    <!-- Question View -->
+    <main id="questionView" class="glass-card" style="display: none;">
+      <div class="timer-container">
+        <div id="timerCircle" class="timer-circle">60</div>
+        <div class="progress-bar-bg">
+          <div id="progressBarFill" class="progress-bar-fill"></div>
+        </div>
+      </div>
+
+      <div class="question-meta">
+        <span id="questionCounter">שאלה 1 מתוך 72</span>
+        <span>כרטיסיה <span id="cardId">1</span></span>
+      </div>
+
+      <div id="questionText" class="question-text">
+        מה מברכים...
+      </div>
+
+      <div id="optionsGrid" class="options-grid">
+        <!-- Options rendered dynamically -->
+      </div>
+
+      <div id="statusMessage" style="text-align: center; margin-top: 16px; font-weight: 700; color: var(--gold-accent); display: none;">
+        תשובתך נקלטה! ממתינים לסיום הזמן... ⏱️
+      </div>
+
+      <!-- Explanation Box (shown after 60s reveal) -->
+      <div id="explanationBox" class="explanation-box" style="display: none;">
+        <div class="explanation-title">
+          <span>📖 הסבר משכיל ומקור הלכתי</span>
+        </div>
+        <div id="explanationBody" class="explanation-body"></div>
+        <div id="sourceTag" class="source-tag"></div>
+      </div>
+    </main>
+
+    <!-- Leaderboard View -->
+    <main id="leaderboardView" class="glass-card" style="display: none;">
+      <h2 style="color: var(--gold-primary); text-align: center; margin-bottom: 14px;">🏆 לוח מובילים</h2>
+      <div id="leaderboardList" class="leaderboard-list">
+        <!-- Leaderboard items -->
+      </div>
+    </main>
+
+    <!-- Finished View -->
+    <main id="finishedView" class="glass-card" style="display: none; text-align: center;">
+      <div style="font-size: 3rem; margin-bottom: 10px;">👑</div>
+      <h2 style="color: var(--gold-accent); margin-bottom: 8px;">המשחק הסתיים!</h2>
+      <p id="winnerText" style="color: var(--text-main); font-size: 1.2rem; font-weight: 800; margin-bottom: 16px;"></p>
+      
+      <div id="finalLeaderboardList" class="leaderboard-list">
+        <!-- Final rankings -->
+      </div>
+
+      <button onclick="window.location.href='index.html'" class="btn-primary" style="margin-top: 20px;">חזרה לדף הראשי</button>
+    </main>
+
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const urlParams = new URLSearchParams(window.location.search);
+    const roomCode = urlParams.get('room') || sessionStorage.getItem('roomCode');
+    let playerName = sessionStorage.getItem('playerName');
+    let userDedication = sessionStorage.getItem('dedication') || '';
+
+    if (!roomCode) {
+      window.location.href = 'index.html';
+    }
+
+    const socket = io();
+    let currentScore = 0;
+    let selectedAnswerIndex = null;
+    let currentQuestionData = null;
+
+    if (!playerName) {
+      document.getElementById('nameEntryView').style.display = 'block';
+      document.getElementById('nameForm').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const inputVal = document.getElementById('nameInput').value.trim();
+        const modalDed = document.getElementById('dedicationInputModal').value.trim();
+        if (inputVal) {
+          playerName = inputVal;
+          sessionStorage.setItem('playerName', playerName);
+          if (modalDed) {
+            userDedication = modalDed;
+            sessionStorage.setItem('dedication', userDedication);
+          }
+          document.getElementById('nameEntryView').style.display = 'none';
+          initPlayerSession();
+        }
+      });
+    } else {
+      initPlayerSession();
+    }
+
+    function initPlayerSession() {
+      document.getElementById('playerBadge').innerText = `שחקן: ${playerName}`;
+      document.getElementById('lobbyView').style.display = 'block';
+      socket.emit('join_room', { roomCode, playerName, dedication: userDedication });
+    }
+
+    socket.on('join_error', (msg) => {
+      alert(msg);
+      window.location.href = 'index.html';
+    });
+
+    socket.on('joined_successfully', (data) => {
+      if (data.dedications && data.dedications.length > 0) {
+        updateTicker(data.dedications);
+      }
+    });
+
+    socket.on('dedications_updated', (dedications) => {
+      if (dedications && dedications.length > 0) {
+        updateTicker(dedications);
+      }
+    });
+
+    function updateTicker(list) {
+      const banner = document.getElementById('tickerBanner');
+      const text = document.getElementById('tickerText');
+      const joined = list.join('  •  ');
+      text.innerText = `📜 הלימוד מוקדש לרפואה ולזכות: ${joined}`;
+      banner.style.display = 'block';
+    }
+
+    socket.on('new_question', (data) => {
+      currentQuestionData = data;
+      selectedAnswerIndex = null;
+
+      if (data.dedications && data.dedications.length > 0) {
+        updateTicker(data.dedications);
+      }
+
+      document.getElementById('lobbyView').style.display = 'none';
+      document.getElementById('leaderboardView').style.display = 'none';
+      document.getElementById('finishedView').style.display = 'none';
+      document.getElementById('explanationBox').style.display = 'none';
+      document.getElementById('statusMessage').style.display = 'none';
+      document.getElementById('questionView').style.display = 'block';
+
+      document.getElementById('questionCounter').innerText = `שאלה ${data.questionIndex + 1} מתוך ${data.totalQuestions}`;
+      document.getElementById('cardId').innerText = data.id || (data.questionIndex + 1);
+      document.getElementById('questionText').innerText = data.question;
+
+      updateTimerUI(data.timer);
+
+      // Render Options
+      const grid = document.getElementById('optionsGrid');
+      grid.innerHTML = '';
+      data.options.forEach((opt, idx) => {
+        const btn = document.createElement('button');
+        btn.className = 'option-btn';
+        btn.innerHTML = `
+          <span class="option-index">${idx + 1}</span>
+          <span>${opt}</span>
+        `;
+        btn.onclick = () => submitChoice(idx);
+        grid.appendChild(btn);
+      });
+    });
+
+    function submitChoice(index) {
+      if (selectedAnswerIndex !== null) return;
+      selectedAnswerIndex = index;
+
+      const btns = document.querySelectorAll('.option-btn');
+      btns.forEach((btn, idx) => {
+        btn.disabled = true;
+        if (idx === index) {
+          btn.classList.add('selected');
+        }
+      });
+
+      document.getElementById('statusMessage').style.display = 'block';
+      socket.emit('submit_answer', { roomCode, answerIndex: index });
+    }
+
+    socket.on('answer_received', (data) => {
+      currentScore = data.score;
+      document.getElementById('scoreBadge').innerText = `ניקוד: ${currentScore}`;
+    });
+
+    socket.on('timer_tick', (data) => {
+      updateTimerUI(data.timer);
+    });
+
+    function updateTimerUI(seconds) {
+      const circle = document.getElementById('timerCircle');
+      circle.innerText = seconds;
+
+      const percent = (seconds / 60) * 100;
+      document.getElementById('progressBarFill').style.width = `${percent}%`;
+
+      if (seconds <= 10) {
+        circle.classList.add('warning');
+      } else {
+        circle.classList.remove('warning');
+      }
+    }
+
+    socket.on('question_ended', (data) => {
+      const btns = document.querySelectorAll('.option-btn');
+      btns.forEach((btn, idx) => {
+        btn.disabled = true;
+        if (idx === data.correctIndex) {
+          btn.classList.add('correct');
+        } else if (idx === selectedAnswerIndex && selectedAnswerIndex !== data.correctIndex) {
+          btn.classList.add('wrong');
+        }
+      });
+
+      document.getElementById('statusMessage').style.display = 'none';
+      const expBox = document.getElementById('explanationBox');
+      document.getElementById('explanationBody').innerText = data.explanation;
+      document.getElementById('sourceTag').innerText = data.source;
+      expBox.style.display = 'block';
+
+      setTimeout(() => {
+        renderLeaderboard(data.leaderboard);
+      }, 3500);
+    });
+
+    function renderLeaderboard(list) {
+      const leaderboardView = document.getElementById('leaderboardView');
+      const listContainer = document.getElementById('leaderboardList');
+      listContainer.innerHTML = '';
+
+      list.forEach((item, index) => {
+        const el = document.createElement('div');
+        el.className = 'leaderboard-item';
+        el.innerHTML = `
+          <div class="leaderboard-rank">${index + 1}</div>
+          <div class="leaderboard-name">${item.name} ${item.isCorrect ? '✅' : '❌'}</div>
+          <div class="leaderboard-score">${item.score} נק'</div>
+        `;
+        listContainer.appendChild(el);
+      });
+
+      leaderboardView.style.display = 'block';
+    }
+
+    socket.on('game_finished', (data) => {
+      document.getElementById('questionView').style.display = 'none';
+      document.getElementById('leaderboardView').style.display = 'none';
+      
+      const finishedView = document.getElementById('finishedView');
+      finishedView.style.display = 'block';
+
+      if (data.winner) {
+        document.getElementById('winnerText').innerText = `🏆 המנצח הגדול: ${data.winner.name} עם ${data.winner.score} נקודות!`;
+      }
+
+      const listContainer = document.getElementById('finalLeaderboardList');
+      listContainer.innerHTML = '';
+
+      data.leaderboard.forEach((item, index) => {
+        const el = document.createElement('div');
+        el.className = 'leaderboard-item';
+        el.innerHTML = `
+          <div class="leaderboard-rank">${index + 1}</div>
+          <div class="leaderboard-name">${item.name}</div>
+          <div class="leaderboard-score">${item.score} נק'</div>
+        `;
+        listContainer.appendChild(el);
+      });
+    });
+  </script>
+</body>
+</html>
