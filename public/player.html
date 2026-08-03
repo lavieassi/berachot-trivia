@@ -32,7 +32,7 @@
         </div>
 
         <div class="input-group">
-          <label class="input-label" for="dedicationInputModal">🕯️ הקדשת הלימוד לרפואה / לעילוי נשמת (אופציונלי):</label>
+          <label class="input-label" for="dedicationInputModal">🕯️ הקדשת הלימוד לרפואה / לעילוי נשמת למשחק זה (אופציונלי):</label>
           <input type="text" id="dedicationInputModal" class="input-field" placeholder="לדוגמה: לרפואת משה בן שרה..." autocomplete="off">
         </div>
 
@@ -125,6 +125,14 @@
     const urlParams = new URLSearchParams(window.location.search);
     const roomCode = urlParams.get('room') || sessionStorage.getItem('roomCode');
     let playerName = sessionStorage.getItem('playerName');
+
+    // Reset dedications if joining a new room code!
+    const lastRoom = sessionStorage.getItem('lastRoomCode');
+    if (lastRoom !== roomCode) {
+      sessionStorage.removeItem('dedication');
+      sessionStorage.setItem('lastRoomCode', roomCode);
+    }
+
     let userDedication = sessionStorage.getItem('dedication') || '';
 
     if (!roomCode) {
@@ -148,6 +156,9 @@
           if (modalDed) {
             userDedication = modalDed;
             sessionStorage.setItem('dedication', userDedication);
+          } else {
+            sessionStorage.removeItem('dedication');
+            userDedication = '';
           }
           document.getElementById('nameEntryView').style.display = 'none';
           initPlayerSession();
@@ -171,21 +182,29 @@
     socket.on('joined_successfully', (data) => {
       if (data.dedications && data.dedications.length > 0) {
         updateTicker(data.dedications);
+      } else {
+        document.getElementById('tickerBanner').style.display = 'none';
       }
     });
 
     socket.on('dedications_updated', (dedications) => {
       if (dedications && dedications.length > 0) {
         updateTicker(dedications);
+      } else {
+        document.getElementById('tickerBanner').style.display = 'none';
       }
     });
 
     function updateTicker(list) {
       const banner = document.getElementById('tickerBanner');
       const text = document.getElementById('tickerText');
-      const joined = list.join('  •  ');
-      text.innerText = `📜 הלימוד מוקדש לרפואה ולזכות: ${joined}`;
-      banner.style.display = 'block';
+      if (list && list.length > 0) {
+        const joined = list.join('  •  ');
+        text.innerText = `📜 הלימוד מוקדש לרפואה ולזכות: ${joined}`;
+        banner.style.display = 'block';
+      } else {
+        banner.style.display = 'none';
+      }
     }
 
     socket.on('new_question', (data) => {
@@ -310,7 +329,6 @@
       const finishedView = document.getElementById('finishedView');
       finishedView.style.display = 'block';
 
-      // Render Podium
       const podium = document.getElementById('playerPodiumContainer');
       podium.innerHTML = '';
 
@@ -318,13 +336,12 @@
         podium.innerHTML += `<div class="leaderboard-item" style="border: 2px solid #FFD700; background: rgba(255,215,0,0.15);"><span style="font-size: 1.4rem;">🥇 מקום 1</span><span class="leaderboard-name" style="font-weight: 800;">${data.winner.name}</span><span class="leaderboard-score">${data.winner.score} נק'</span></div>`;
       }
       if (data.secondPlace) {
-        podium.innerHTML += `<div class="leaderboard-item" style="border: 1.5px solid #C0C0C0; background: rgba(192,192,192,0.15);"><span style="font-size: 1.2rem;">🥈 מקום 2</span><span class="leaderboard-name">${data.secondPlace.name}</span><span class="leaderboard-score">${data.secondPlace.score} ${data.secondPlace.score} נק'</span></div>`;
+        podium.innerHTML += `<div class="leaderboard-item" style="border: 1.5px solid #C0C0C0; background: rgba(192,192,192,0.15);"><span style="font-size: 1.2rem;">🥈 מקום 2</span><span class="leaderboard-name">${data.secondPlace.name}</span><span class="leaderboard-score">${data.secondPlace.score} נק'</span></div>`;
       }
       if (data.thirdPlace) {
         podium.innerHTML += `<div class="leaderboard-item" style="border: 1.5px solid #CD7F32; background: rgba(205,127,50,0.15);"><span style="font-size: 1.1rem;">🥉 מקום 3</span><span class="leaderboard-name">${data.thirdPlace.name}</span><span class="leaderboard-score">${data.thirdPlace.score} נק'</span></div>`;
       }
 
-      // Render Stats
       const statsBox = document.getElementById('playerStatsContainer');
       statsBox.innerHTML = `
         <h3 style="color: var(--gold-primary); margin-bottom: 8px; font-size: 1.05rem;">📊 סיכום וסטטיסטיקות:</h3>

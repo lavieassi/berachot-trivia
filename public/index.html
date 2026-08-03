@@ -30,8 +30,8 @@
         </div>
 
         <div class="input-group">
-          <label class="input-label" for="dedicationInput">🕯️ הקדשת הלימוד לרפואה / לעילוי נשמת (אופציונלי):</label>
-          <input type="text" id="dedicationInput" class="input-field" placeholder="לדוגמה: לרפואת משה בן שרה / לעילוי נשמת..." autocomplete="off">
+          <label class="input-label" for="dedicationInput">🕯️ הקדשת הלימוד לרפואה / לעילוי נשמת למשחק זה (אופציונלי):</label>
+          <input type="text" id="dedicationInput" class="input-field" placeholder="לדוגמה: לרפואת משה בן שרה..." autocomplete="off">
         </div>
 
         <button type="submit" class="btn-primary" style="margin-top: 10px;">כניסה למשחק 🚀</button>
@@ -51,6 +51,9 @@
       document.getElementById('roomCode').value = roomParam;
     }
 
+    // Always clear old session dedications when entering index page
+    sessionStorage.removeItem('dedication');
+
     document.getElementById('joinForm').addEventListener('submit', (e) => {
       e.preventDefault();
       const playerName = document.getElementById('playerName').value.trim();
@@ -60,8 +63,11 @@
       if (playerName && roomCode) {
         sessionStorage.setItem('playerName', playerName);
         sessionStorage.setItem('roomCode', roomCode);
+        sessionStorage.setItem('lastRoomCode', roomCode);
         if (dedication) {
           sessionStorage.setItem('dedication', dedication);
+        } else {
+          sessionStorage.removeItem('dedication');
         }
         window.location.href = `player.html?room=${roomCode}`;
       }
