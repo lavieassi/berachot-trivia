@@ -38,15 +38,7 @@
         </select>
       </div>
 
-      <button id="createRoomBtn" class="btn-primary" style="margin-bottom: 16px;">צור חדר משחק 🎲</button>
-
-      <div style="border-top: 1px solid rgba(255,255,255,0.1); padding-top: 16px; margin-top: 12px; text-align: right;">
-        <h3 style="color: var(--gold-accent); font-size: 1.05rem; margin-bottom: 8px;">📑 עריכה וייבוא 72 השאלות (אופציונלי):</h3>
-        <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 10px;">
-          המערכת מגיעה מובנית עם 72 שאלות מקיצור ילקוט יוסף.
-        </p>
-        <textarea id="questionsJsonArea" class="input-field" rows="3" placeholder="הדבק כאן JSON של שאלות (אופציונלי)..." style="font-family: monospace; font-size: 0.85rem;"></textarea>
-      </div>
+      <button id="createRoomBtn" class="btn-primary" style="margin-bottom: 8px;">צור חדר משחק 🎲</button>
     </main>
 
     <!-- Active Room Dashboard -->
@@ -138,17 +130,8 @@
     let currentRoomCode = null;
 
     document.getElementById('createRoomBtn').addEventListener('click', () => {
-      let customQuestions = null;
-      const jsonAreaText = document.getElementById('questionsJsonArea').value.trim();
-      if (jsonAreaText) {
-        try {
-          customQuestions = JSON.parse(jsonAreaText);
-        } catch (err) {
-          alert('קובץ ה-JSON שהכנסת אינו תקין. נעשה שימוש בשאלות ברירת המחדל.');
-        }
-      }
       const count = document.getElementById('questionCountSelect').value;
-      socket.emit('create_room', { customQuestions, questionCount: count });
+      socket.emit('create_room', { questionCount: count });
     });
 
     socket.on('room_created', (data) => {
@@ -159,7 +142,6 @@
       document.getElementById('qrRoomCodeBadge').innerText = data.roomCode;
 
       const origin = window.location.origin || (window.location.protocol + '//' + window.location.host);
-      // Clean short URL for QR scanners
       const joinUrl = `${origin}/?room=${data.roomCode}`;
       document.getElementById('joinUrlText').innerText = joinUrl;
 
