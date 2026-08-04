@@ -44,7 +44,14 @@ app.get('/api/qr', async (req, res) => {
   const url = req.query.url;
   if (!url) return res.status(400).json({ error: 'Missing url' });
   try {
-    const qrDataUrl = await QRCode.toDataURL(url);
+    const qrDataUrl = await QRCode.toDataURL(url, {
+      margin: 1,
+      width: 320,
+      color: {
+        dark: '#0D1B2A',
+        light: '#FFFFFF'
+      }
+    });
     res.json({ qr: qrDataUrl });
   } catch (err) {
     res.status(500).json({ error: 'Failed to generate QR' });
@@ -158,7 +165,6 @@ io.on('connection', (socket) => {
       currentQuestion: currentQPayload
     });
 
-    // Broadcast updated player list & dedications
     const playerList = Object.values(room.players).map(p => ({ id: p.socketId, name: p.name, score: p.score }));
     io.to(roomCode).emit('player_list_updated', playerList);
     io.to(roomCode).emit('dedications_updated', room.dedications);
@@ -174,7 +180,7 @@ io.on('connection', (socket) => {
     startQuestionRound(roomCode);
   });
 
-  // Player submits or updates answer choice (allow changing until time expires)
+  // Player submits answer choice
   socket.on('submit_answer', ({ roomCode, playerId, answerIndex }) => {
     const room = rooms[roomCode];
     if (!room || room.status !== 'playing') return;
@@ -183,7 +189,6 @@ io.on('connection', (socket) => {
     const player = room.players[pId] || Object.values(room.players).find(p => p.socketId === socket.id);
     if (!player) return;
 
-    // Update selection
     player.hasAnswered = true;
     player.lastAnswerIndex = answerIndex;
     player.lastAnswerTime = room.timer;
@@ -232,7 +237,6 @@ io.on('connection', (socket) => {
       const room = rooms[roomCode];
       const p = Object.values(room.players).find(p => p.socketId === socket.id);
       if (p) {
-        // Player disconnected socket, keep data in room.players for potential reconnect
         const playerList = Object.values(room.players).map(p => ({ id: p.socketId, name: p.name, score: p.score }));
         io.to(roomCode).emit('player_list_updated', playerList);
       }
@@ -290,7 +294,6 @@ function endQuestionRound(roomCode) {
 
   const q = room.questions[room.currentQuestionIndex];
 
-  // Calculate scores for final selected choices
   Object.values(room.players).forEach(p => {
     if (p.hasAnswered) {
       p.totalAnswered++;
