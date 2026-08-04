@@ -54,7 +54,7 @@ app.get('/api/qr', async (req, res) => {
 io.on('connection', (socket) => {
   console.log('Client connected:', socket.id);
 
-  // Host creates room with optional question count & custom questions
+  // Host creates room
   socket.on('create_room', ({ customQuestions, questionCount } = {}) => {
     const roomCode = generateRoomCode();
     const rawQuestions = (Array.isArray(customQuestions) && customQuestions.length > 0)
@@ -71,7 +71,7 @@ io.on('connection', (socket) => {
     rooms[roomCode] = {
       code: roomCode,
       hostSocketId: socket.id,
-      players: {},
+      players: {}, // mapped by persistent playerId
       dedications: [],
       questions: shuffledQuestions,
       currentQuestionIndex: -1,
@@ -87,24 +87,15 @@ io.on('connection', (socket) => {
     });
   });
 
-  socket.on('join_room', ({ roomCode, playerName, dedication }) => {
+  // Player joins or reconnects
+  socket.on('join_room', ({ roomCode, playerId, playerName, dedication }) => {
     const room = rooms[roomCode];
     if (!room) {
-      return socket.emit('join_error', 'קוד חדר לא קיים');
+      return socket.emit('join_error', 'קוד חדר לא קיים או שהמשחק פג תוקף');
     }
-    const cleanName = playerName ? playerName.trim() : 'שחקן ' + socket.id.substring(0, 4);
 
-    room.players[socket.id] = {
-      id: socket.id,
-      name: cleanName,
-      score: 0,
-      correctCount: 0,
-      totalAnswered: 0,
-      totalSpeedSeconds: 0,
-      hasAnswered: false,
-      lastAnswerIndex: null,
-      lastAnswerTime: 0
-    };
+    const pId = playerId || socket.id;
+    const cleanName = playerName ? playerName.trim() : 'שחקן ' + pId.substring(0, 4);
 
     if (dedication && typeof dedication === 'string') {
       const cleanDedication = dedication.trim();
@@ -113,21 +104,67 @@ io.on('connection', (socket) => {
       }
     }
 
+    let player = room.players[pId];
+    if (player) {
+      // Reconnecting existing player
+      player.socketId = socket.id;
+      player.name = cleanName;
+    } else {
+      // New player
+      player = {
+        playerId: pId,
+        socketId: socket.id,
+        name: cleanName,
+        score: 0,
+        correctCount: 0,
+        totalAnswered: 0,
+        totalSpeedSeconds: 0,
+        hasAnswered: false,
+        lastAnswerIndex: null,
+        lastAnswerTime: 0
+      };
+      room.players[pId] = player;
+    }
+
     socket.join(roomCode);
+
+    // Prepare current question payload if game is active
+    let currentQPayload = null;
+    if (room.status === 'playing' || room.status === 'revealed') {
+      const q = room.questions[room.currentQuestionIndex];
+      currentQPayload = {
+        questionIndex: room.currentQuestionIndex,
+        totalQuestions: room.questions.length,
+        id: q ? q.id : 1,
+        question: q ? q.question : '',
+        options: q ? q.options : [],
+        timer: room.timer,
+        correctIndex: room.status === 'revealed' ? q.correctIndex : null,
+        explanation: room.status === 'revealed' ? q.explanation : null,
+        source: room.status === 'revealed' ? q.source : null
+      };
+    }
 
     socket.emit('joined_successfully', {
       roomCode,
+      playerId: pId,
       playerName: cleanName,
       status: room.status,
       currentQuestionIndex: room.currentQuestionIndex,
       totalQuestions: room.questions.length,
-      dedications: room.dedications
+      dedications: room.dedications,
+      score: player.score,
+      lastAnswerIndex: player.lastAnswerIndex,
+      currentQuestion: currentQPayload
     });
 
-    io.to(roomCode).emit('player_list_updated', Object.values(room.players));
+    // Broadcast updated player list & dedications
+    const playerList = Object.values(room.players).map(p => ({ id: p.socketId, name: p.name, score: p.score }));
+    io.to(roomCode).emit('player_list_updated', playerList);
     io.to(roomCode).emit('dedications_updated', room.dedications);
   });
 
+  // Host starts game
   socket.on('start_game', ({ roomCode }) => {
     const room = rooms[roomCode];
     if (!room || room.hostSocketId !== socket.id) return;
@@ -137,25 +174,19 @@ io.on('connection', (socket) => {
     startQuestionRound(roomCode);
   });
 
-  socket.on('submit_answer', ({ roomCode, answerIndex }) => {
+  // Player submits or updates answer choice (allow changing until time expires)
+  socket.on('submit_answer', ({ roomCode, playerId, answerIndex }) => {
     const room = rooms[roomCode];
     if (!room || room.status !== 'playing') return;
 
-    const player = room.players[socket.id];
-    if (!player || player.hasAnswered) return;
+    const pId = playerId || socket.id;
+    const player = room.players[pId] || Object.values(room.players).find(p => p.socketId === socket.id);
+    if (!player) return;
 
+    // Update selection
     player.hasAnswered = true;
     player.lastAnswerIndex = answerIndex;
     player.lastAnswerTime = room.timer;
-    player.totalAnswered++;
-
-    const currentQ = room.questions[room.currentQuestionIndex];
-    if (currentQ && answerIndex === currentQ.correctIndex) {
-      player.correctCount++;
-      const speedBonus = Math.floor((room.timer / 60) * 500);
-      player.score += (1000 + speedBonus);
-      player.totalSpeedSeconds += room.timer;
-    }
 
     socket.emit('answer_received', {
       answerIndex,
@@ -169,12 +200,9 @@ io.on('connection', (socket) => {
       answeredCount,
       totalPlayers
     });
-
-    if (totalPlayers > 0 && answeredCount === totalPlayers) {
-      endQuestionRound(roomCode);
-    }
   });
 
+  // Host advances round
   socket.on('next_question', ({ roomCode }) => {
     const room = rooms[roomCode];
     if (!room || room.hostSocketId !== socket.id) return;
@@ -192,7 +220,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Host manually ends game early and triggers podium/stats
+  // Host manually ends game early
   socket.on('end_game_early', ({ roomCode }) => {
     const room = rooms[roomCode];
     if (!room || room.hostSocketId !== socket.id) return;
@@ -202,9 +230,11 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => {
     for (const roomCode in rooms) {
       const room = rooms[roomCode];
-      if (room.players[socket.id]) {
-        delete room.players[socket.id];
-        io.to(roomCode).emit('player_list_updated', Object.values(room.players));
+      const p = Object.values(room.players).find(p => p.socketId === socket.id);
+      if (p) {
+        // Player disconnected socket, keep data in room.players for potential reconnect
+        const playerList = Object.values(room.players).map(p => ({ id: p.socketId, name: p.name, score: p.score }));
+        io.to(roomCode).emit('player_list_updated', playerList);
       }
     }
   });
@@ -260,10 +290,23 @@ function endQuestionRound(roomCode) {
 
   const q = room.questions[room.currentQuestionIndex];
 
+  // Calculate scores for final selected choices
+  Object.values(room.players).forEach(p => {
+    if (p.hasAnswered) {
+      p.totalAnswered++;
+      if (p.lastAnswerIndex === q.correctIndex) {
+        p.correctCount++;
+        const speedBonus = Math.floor((p.lastAnswerTime / 60) * 500);
+        p.score += (1000 + speedBonus);
+        p.totalSpeedSeconds += p.lastAnswerTime;
+      }
+    }
+  });
+
   const leaderboard = Object.values(room.players)
     .sort((a, b) => b.score - a.score)
     .map(p => ({
-      id: p.id,
+      id: p.playerId,
       name: p.name,
       score: p.score,
       lastAnswerIndex: p.lastAnswerIndex,
@@ -290,20 +333,16 @@ function finishGame(roomCode) {
 
   const playersList = Object.values(room.players).sort((a, b) => b.score - a.score);
 
-  // Top 3 Podium
   const winner = playersList[0] || null;
   const secondPlace = playersList[1] || null;
   const thirdPlace = playersList[2] || null;
 
-  // Fun Stats
-  // Fastest responder (highest average remaining seconds on correct answers)
   const fastestPlayer = [...playersList].sort((a, b) => {
     const avgA = a.correctCount > 0 ? (a.totalSpeedSeconds / a.correctCount) : 0;
     const avgB = b.correctCount > 0 ? (b.totalSpeedSeconds / b.correctCount) : 0;
     return avgB - avgA;
   })[0] || null;
 
-  // Most accurate player (highest correct percentage)
   const mostAccuratePlayer = [...playersList].sort((a, b) => {
     const pctA = a.totalAnswered > 0 ? (a.correctCount / a.totalAnswered) : 0;
     const pctB = b.totalAnswered > 0 ? (b.correctCount / b.totalAnswered) : 0;

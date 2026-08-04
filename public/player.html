@@ -21,10 +21,10 @@
       </div>
     </header>
 
-    <!-- Name & Dedication Entry Modal (Shown whenever joining a new room) -->
+    <!-- Name & Dedication Entry Modal -->
     <main id="nameEntryView" class="glass-card" style="display: none; text-align: center;">
       <h2 style="color: var(--gold-primary); margin-bottom: 12px;">ברוך הבא למשחק! 🎉</h2>
-      <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 18px;">אנא אשר/הכנס את שמך ואת ההקדשה למשחק זה:</p>
+      <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 18px;">אנא הכנס/אשר את שמך כדי להצטרף לחדר המשחק באוטובוס:</p>
       <form id="nameForm">
         <div class="input-group">
           <label class="input-label" for="nameInput">השם שלך:</label>
@@ -75,7 +75,7 @@
       </div>
 
       <div id="statusMessage" style="text-align: center; margin-top: 16px; font-weight: 700; color: var(--gold-accent); display: none;">
-        תשובתך נקלטה! ממתינים לסיום הזמן... ⏱️
+        תשובתך נקלטה! תוכל לשנות בחירתך עד לתום 60 השניות... ⏱️
       </div>
 
       <!-- Explanation Box (shown after 60s reveal) -->
@@ -115,29 +115,45 @@
         <!-- Final rankings -->
       </div>
 
-      <button onclick="window.location.href='index.html'" class="btn-primary" style="margin-top: 20px;">חזרה לדף הראשי</button>
+      <button onclick="localStorage.removeItem('activeRoomCode'); window.location.href='index.html'" class="btn-primary" style="margin-top: 20px;">חזרה לדף הראשי</button>
     </main>
 
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
   <script>
+    // Get or generate persistent playerId
+    let playerId = localStorage.getItem('playerId');
+    if (!playerId) {
+      playerId = 'player_' + Math.random().toString(36).substring(2, 10) + Date.now();
+      localStorage.setItem('playerId', playerId);
+    }
+
     const urlParams = new URLSearchParams(window.location.search);
-    const roomCode = urlParams.get('room') || sessionStorage.getItem('roomCode');
+    const roomCode = urlParams.get('room') || localStorage.getItem('activeRoomCode');
 
     if (!roomCode) {
       window.location.href = 'index.html';
     }
+
+    localStorage.setItem('activeRoomCode', roomCode);
 
     const socket = io();
     let currentScore = 0;
     let selectedAnswerIndex = null;
     let currentQuestionData = null;
 
-    let savedName = sessionStorage.getItem('playerName') || '';
-    let lastRoomJoined = sessionStorage.getItem('lastRoomJoined');
+    let savedName = localStorage.getItem('playerName') || '';
+    let lastRoomJoined = localStorage.getItem('lastRoomJoined');
 
-    // Always show name & dedication entry form if joining a NEW room
+    // Reset dedications if joining a new room code
+    if (lastRoomJoined !== roomCode) {
+      localStorage.removeItem('dedication');
+      localStorage.setItem('lastRoomJoined', roomCode);
+    }
+
+    let userDedication = localStorage.getItem('dedication') || '';
+
     if (!savedName || lastRoomJoined !== roomCode) {
       document.getElementById('nameEntryView').style.display = 'block';
       if (savedName) {
@@ -151,14 +167,14 @@
 
         if (inputVal) {
           playerName = inputVal;
-          sessionStorage.setItem('playerName', playerName);
-          sessionStorage.setItem('lastRoomJoined', roomCode);
+          localStorage.setItem('playerName', playerName);
+          localStorage.setItem('lastRoomJoined', roomCode);
 
           if (modalDed) {
             userDedication = modalDed;
-            sessionStorage.setItem('dedication', userDedication);
+            localStorage.setItem('dedication', userDedication);
           } else {
-            sessionStorage.removeItem('dedication');
+            localStorage.removeItem('dedication');
             userDedication = '';
           }
 
@@ -168,26 +184,34 @@
       });
     } else {
       playerName = savedName;
-      userDedication = sessionStorage.getItem('dedication') || '';
       initPlayerSession();
     }
 
     function initPlayerSession() {
       document.getElementById('playerBadge').innerText = `שחקן: ${playerName}`;
       document.getElementById('lobbyView').style.display = 'block';
-      socket.emit('join_room', { roomCode, playerName, dedication: userDedication });
+      socket.emit('join_room', { roomCode, playerId, playerName, dedication: userDedication });
     }
 
     socket.on('join_error', (msg) => {
       alert(msg);
+      localStorage.removeItem('activeRoomCode');
       window.location.href = 'index.html';
     });
 
     socket.on('joined_successfully', (data) => {
+      currentScore = data.score || 0;
+      document.getElementById('scoreBadge').innerText = `ניקוד: ${currentScore}`;
+
       if (data.dedications && data.dedications.length > 0) {
         updateTicker(data.dedications);
-      } else {
-        document.getElementById('tickerBanner').style.display = 'none';
+      }
+
+      if (data.status === 'playing' && data.currentQuestion) {
+        renderQuestion(data.currentQuestion, data.lastAnswerIndex);
+      } else if (data.status === 'revealed' && data.currentQuestion) {
+        renderQuestion(data.currentQuestion, data.lastAnswerIndex);
+        revealQuestionAnswer(data.currentQuestion);
       }
     });
 
@@ -212,18 +236,19 @@
     }
 
     socket.on('new_question', (data) => {
+      renderQuestion(data, null);
+    });
+
+    function renderQuestion(data, initialSelected) {
       currentQuestionData = data;
-      selectedAnswerIndex = null;
+      selectedAnswerIndex = initialSelected !== undefined ? initialSelected : null;
 
-      if (data.dedications && data.dedications.length > 0) {
-        updateTicker(data.dedications);
-      }
-
+      document.getElementById('nameEntryView').style.display = 'none';
       document.getElementById('lobbyView').style.display = 'none';
       document.getElementById('leaderboardView').style.display = 'none';
       document.getElementById('finishedView').style.display = 'none';
       document.getElementById('explanationBox').style.display = 'none';
-      document.getElementById('statusMessage').style.display = 'none';
+      document.getElementById('statusMessage').style.display = selectedAnswerIndex !== null ? 'block' : 'none';
       document.getElementById('questionView').style.display = 'block';
 
       document.getElementById('questionCounter').innerText = `שאלה ${data.questionIndex + 1} מתוך ${data.totalQuestions}`;
@@ -232,34 +257,36 @@
 
       updateTimerUI(data.timer);
 
+      // Render Options - ALLOW CHANGING CHOICE until round ends!
       const grid = document.getElementById('optionsGrid');
       grid.innerHTML = '';
       data.options.forEach((opt, idx) => {
         const btn = document.createElement('button');
-        btn.className = 'option-btn';
+        btn.className = 'option-btn' + (idx === selectedAnswerIndex ? ' selected' : '');
         btn.innerHTML = `
           <span class="option-index">${idx + 1}</span>
           <span>${opt}</span>
         `;
-        btn.onclick = () => submitChoice(idx);
+        btn.onclick = () => selectChoice(idx);
         grid.appendChild(btn);
       });
-    });
+    }
 
-    function submitChoice(index) {
-      if (selectedAnswerIndex !== null) return;
+    function selectChoice(index) {
+      // Allow player to change choice as many times as they want during round
       selectedAnswerIndex = index;
 
       const btns = document.querySelectorAll('.option-btn');
       btns.forEach((btn, idx) => {
-        btn.disabled = true;
         if (idx === index) {
           btn.classList.add('selected');
+        } else {
+          btn.classList.remove('selected');
         }
       });
 
       document.getElementById('statusMessage').style.display = 'block';
-      socket.emit('submit_answer', { roomCode, answerIndex: index });
+      socket.emit('submit_answer', { roomCode, playerId, answerIndex: index });
     }
 
     socket.on('answer_received', (data) => {
@@ -286,9 +313,17 @@
     }
 
     socket.on('question_ended', (data) => {
+      revealQuestionAnswer(data);
+
+      setTimeout(() => {
+        renderLeaderboard(data.leaderboard);
+      }, 3500);
+    });
+
+    function revealQuestionAnswer(data) {
       const btns = document.querySelectorAll('.option-btn');
       btns.forEach((btn, idx) => {
-        btn.disabled = true;
+        btn.disabled = true; // Lock choices when timer expires or answer is revealed
         if (idx === data.correctIndex) {
           btn.classList.add('correct');
         } else if (idx === selectedAnswerIndex && selectedAnswerIndex !== data.correctIndex) {
@@ -301,11 +336,7 @@
       document.getElementById('explanationBody').innerText = data.explanation;
       document.getElementById('sourceTag').innerText = data.source;
       expBox.style.display = 'block';
-
-      setTimeout(() => {
-        renderLeaderboard(data.leaderboard);
-      }, 3500);
-    });
+    }
 
     function renderLeaderboard(list) {
       const leaderboardView = document.getElementById('leaderboardView');
@@ -327,6 +358,7 @@
     }
 
     socket.on('game_finished', (data) => {
+      localStorage.removeItem('activeRoomCode');
       document.getElementById('questionView').style.display = 'none';
       document.getElementById('leaderboardView').style.display = 'none';
       

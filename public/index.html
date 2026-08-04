@@ -16,6 +16,12 @@
     </header>
 
     <main class="glass-card">
+      <!-- Reconnect Banner if player was in an active room -->
+      <div id="reconnectBanner" style="display: none; margin-bottom: 20px; background: rgba(255,215,0,0.15); border: 1px solid var(--gold-accent); padding: 16px; border-radius: var(--radius-md); text-align: center;">
+        <p style="color: var(--gold-accent); font-weight: 800; font-size: 1.1rem; margin-bottom: 8px;">אתה באמצע משחק פעיל! 🎮</p>
+        <button id="reconnectBtn" class="btn-primary">🔄 חזרה למשחק (חדר <span id="reconnectRoomCode">----</span>)</button>
+      </div>
+
       <h2 style="color: var(--gold-primary); margin-bottom: 16px; font-size: 1.3rem; text-align: center;">הצטרפות למשחק</h2>
       
       <form id="joinForm">
@@ -36,23 +42,32 @@
 
         <button type="submit" class="btn-primary" style="margin-top: 10px;">כניסה למשחק 🚀</button>
       </form>
-
-      <div style="margin-top: 24px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 20px; text-align: center;">
-        <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 12px;">מארגן המשחק באוטובוס?</p>
-        <a href="host.html" class="btn-secondary" style="text-decoration: none; display: block;">פתח חדר כמנחה (Host) 👑</a>
-      </div>
     </main>
   </div>
 
   <script>
+    // Generate persistent playerId if not present
+    let playerId = localStorage.getItem('playerId');
+    if (!playerId) {
+      playerId = 'player_' + Math.random().toString(36).substring(2, 10) + Date.now();
+      localStorage.setItem('playerId', playerId);
+    }
+
     const urlParams = new URLSearchParams(window.location.search);
     const roomParam = urlParams.get('room');
     if (roomParam) {
       document.getElementById('roomCode').value = roomParam;
     }
 
-    // Always clear old session dedications when entering index page
-    sessionStorage.removeItem('dedication');
+    const activeRoomCode = localStorage.getItem('activeRoomCode');
+    const savedName = localStorage.getItem('playerName');
+    if (activeRoomCode && savedName) {
+      document.getElementById('reconnectBanner').style.display = 'block';
+      document.getElementById('reconnectRoomCode').innerText = activeRoomCode;
+      document.getElementById('reconnectBtn').addEventListener('click', () => {
+        window.location.href = `player.html?room=${activeRoomCode}`;
+      });
+    }
 
     document.getElementById('joinForm').addEventListener('submit', (e) => {
       e.preventDefault();
@@ -61,13 +76,13 @@
       const dedication = document.getElementById('dedicationInput').value.trim();
 
       if (playerName && roomCode) {
-        sessionStorage.setItem('playerName', playerName);
-        sessionStorage.setItem('roomCode', roomCode);
-        sessionStorage.setItem('lastRoomCode', roomCode);
+        localStorage.setItem('playerName', playerName);
+        localStorage.setItem('activeRoomCode', roomCode);
+        localStorage.setItem('lastRoomCode', roomCode);
         if (dedication) {
-          sessionStorage.setItem('dedication', dedication);
+          localStorage.setItem('dedication', dedication);
         } else {
-          sessionStorage.removeItem('dedication');
+          localStorage.removeItem('dedication');
         }
         window.location.href = `player.html?room=${roomCode}`;
       }
