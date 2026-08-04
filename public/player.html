@@ -78,7 +78,7 @@
         תשובתך נקלטה! תוכל לשנות בחירתך עד לתום 60 השניות... ⏱️
       </div>
 
-      <!-- Explanation Box (shown after 60s reveal) -->
+      <!-- Explanation Box -->
       <div id="explanationBox" class="explanation-box" style="display: none;">
         <div class="explanation-title">
           <span>📖 הסבר משכיל ומקור הלכתי</span>
@@ -122,7 +122,6 @@
 
   <script src="/socket.io/socket.io.js"></script>
   <script>
-    // Get or generate persistent playerId
     let playerId = localStorage.getItem('playerId');
     if (!playerId) {
       playerId = 'player_' + Math.random().toString(36).substring(2, 10) + Date.now();
@@ -130,13 +129,18 @@
     }
 
     const urlParams = new URLSearchParams(window.location.search);
-    const roomCode = urlParams.get('room') || localStorage.getItem('activeRoomCode');
+    const roomFromUrl = urlParams.get('room');
+
+    // Priority to room code explicitly passed in URL from QR code!
+    if (roomFromUrl) {
+      localStorage.setItem('activeRoomCode', roomFromUrl);
+    }
+
+    const roomCode = roomFromUrl || localStorage.getItem('activeRoomCode');
 
     if (!roomCode) {
       window.location.href = 'index.html';
     }
-
-    localStorage.setItem('activeRoomCode', roomCode);
 
     const socket = io();
     let currentScore = 0;
@@ -149,11 +153,11 @@
     // Reset dedications if joining a new room code
     if (lastRoomJoined !== roomCode) {
       localStorage.removeItem('dedication');
-      localStorage.setItem('lastRoomJoined', roomCode);
     }
 
     let userDedication = localStorage.getItem('dedication') || '';
 
+    // Show name & dedication modal if joining new room or name missing
     if (!savedName || lastRoomJoined !== roomCode) {
       document.getElementById('nameEntryView').style.display = 'block';
       if (savedName) {
@@ -169,6 +173,7 @@
           playerName = inputVal;
           localStorage.setItem('playerName', playerName);
           localStorage.setItem('lastRoomJoined', roomCode);
+          localStorage.setItem('activeRoomCode', roomCode);
 
           if (modalDed) {
             userDedication = modalDed;
@@ -205,6 +210,8 @@
 
       if (data.dedications && data.dedications.length > 0) {
         updateTicker(data.dedications);
+      } else {
+        document.getElementById('tickerBanner').style.display = 'none';
       }
 
       if (data.status === 'playing' && data.currentQuestion) {
@@ -257,7 +264,6 @@
 
       updateTimerUI(data.timer);
 
-      // Render Options - ALLOW CHANGING CHOICE until round ends!
       const grid = document.getElementById('optionsGrid');
       grid.innerHTML = '';
       data.options.forEach((opt, idx) => {
@@ -273,7 +279,6 @@
     }
 
     function selectChoice(index) {
-      // Allow player to change choice as many times as they want during round
       selectedAnswerIndex = index;
 
       const btns = document.querySelectorAll('.option-btn');
@@ -323,7 +328,7 @@
     function revealQuestionAnswer(data) {
       const btns = document.querySelectorAll('.option-btn');
       btns.forEach((btn, idx) => {
-        btn.disabled = true; // Lock choices when timer expires or answer is revealed
+        btn.disabled = true;
         if (idx === data.correctIndex) {
           btn.classList.add('correct');
         } else if (idx === selectedAnswerIndex && selectedAnswerIndex !== data.correctIndex) {

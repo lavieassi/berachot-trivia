@@ -63,7 +63,7 @@
 
       <!-- QR Code Section -->
       <div class="qr-box">
-        <div class="qr-label">📱 סרוק בטלפון כדי להצטרף למשחק:</div>
+        <div class="qr-label">📱 סרוק בטלפון כדי להצטרף למשחק זה:</div>
         <img id="qrImage" src="" alt="קוד QR להצטרפות">
         <div id="joinUrlText" style="color: #0D1B2A; font-weight: 700; font-size: 0.85rem; word-break: break-all;"></div>
       </div>
@@ -220,7 +220,6 @@
       document.getElementById('hostTimerText').innerText = `${data.timer} שניות`;
       document.getElementById('answerProgressText').innerText = `ענו 0 שחקנים`;
 
-      // Render Options on Host Screen
       const grid = document.getElementById('hostOptionsGrid');
       grid.innerHTML = '';
       data.options.forEach((opt, idx) => {
@@ -246,7 +245,6 @@
     socket.on('question_ended', (data) => {
       document.getElementById('answerProgressText').innerText = `תום 60 השניות! התשובה הנכונה: אופציה ${data.correctIndex + 1}`;
 
-      // Highlight correct answer option on host screen
       const btns = document.querySelectorAll('#hostOptionsGrid .option-btn');
       btns.forEach((btn, idx) => {
         if (idx === data.correctIndex) {
@@ -254,10 +252,9 @@
         }
       });
 
-      // Show explanation on host screen
       const expBox = document.getElementById('hostExplanationBox');
       document.getElementById('hostExplanationBody').innerText = data.explanation;
-      document.getElementById('hostSourceTag').innerText = data.source;
+      document.getElementById('sourceTag').innerText = data.source;
       expBox.style.display = 'block';
     });
 
