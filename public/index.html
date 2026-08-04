@@ -16,10 +16,10 @@
     </header>
 
     <main class="glass-card">
-      <!-- Reconnect Banner if player was in an active room -->
-      <div id="reconnectBanner" style="display: none; margin-bottom: 20px; background: rgba(255,215,0,0.15); border: 1px solid var(--gold-accent); padding: 16px; border-radius: var(--radius-md); text-align: center;">
-        <p style="color: var(--gold-accent); font-weight: 800; font-size: 1.1rem; margin-bottom: 8px;">אתה באמצע משחק פעיל! 🎮</p>
-        <button id="reconnectBtn" class="btn-primary">🔄 חזרה למשחק (חדר <span id="reconnectRoomCode">----</span>)</button>
+      <!-- Reconnect Banner if player was in an active room or scanned QR -->
+      <div id="qrScannedBanner" style="display: none; margin-bottom: 20px; background: rgba(255,215,0,0.15); border: 2px solid var(--gold-accent); padding: 16px; border-radius: var(--radius-md); text-align: center;">
+        <p style="color: var(--gold-accent); font-weight: 800; font-size: 1.15rem; margin-bottom: 8px;">סרקת קוד QR לחדר <span id="qrScannedRoom">----</span>! 📱</p>
+        <button id="quickJoinBtn" class="btn-primary">🚀 כניסה מהירה לחדר <span id="qrScannedRoomBtn">----</span></button>
       </div>
 
       <h2 style="color: var(--gold-primary); margin-bottom: 16px; font-size: 1.3rem; text-align: center;">הצטרפות למשחק</h2>
@@ -46,7 +46,6 @@
   </div>
 
   <script>
-    // Generate persistent playerId if not present
     let playerId = localStorage.getItem('playerId');
     if (!playerId) {
       playerId = 'player_' + Math.random().toString(36).substring(2, 10) + Date.now();
@@ -55,18 +54,28 @@
 
     const urlParams = new URLSearchParams(window.location.search);
     const roomParam = urlParams.get('room');
+
     if (roomParam) {
       document.getElementById('roomCode').value = roomParam;
+      localStorage.setItem('activeRoomCode', roomParam);
+
+      document.getElementById('qrScannedBanner').style.display = 'block';
+      document.getElementById('qrScannedRoom').innerText = roomParam;
+      document.getElementById('qrScannedRoomBtn').innerText = roomParam;
+
+      document.getElementById('quickJoinBtn').addEventListener('click', () => {
+        let name = document.getElementById('playerName').value.trim() || localStorage.getItem('playerName');
+        if (!name) {
+          name = prompt('אנא הכנס את שמך למשחק:') || 'שחקן';
+        }
+        localStorage.setItem('playerName', name);
+        window.location.href = `player.html?room=${roomParam}`;
+      });
     }
 
-    const activeRoomCode = localStorage.getItem('activeRoomCode');
     const savedName = localStorage.getItem('playerName');
-    if (activeRoomCode && savedName) {
-      document.getElementById('reconnectBanner').style.display = 'block';
-      document.getElementById('reconnectRoomCode').innerText = activeRoomCode;
-      document.getElementById('reconnectBtn').addEventListener('click', () => {
-        window.location.href = `player.html?room=${activeRoomCode}`;
-      });
+    if (savedName) {
+      document.getElementById('playerName').value = savedName;
     }
 
     document.getElementById('joinForm').addEventListener('submit', (e) => {
